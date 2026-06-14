@@ -42,16 +42,7 @@ html, body { height: 100%; font-family: -apple-system, BlinkMacSystemFont, 'Sego
 }
 .action-btn:hover { background: #2a4cd7; }
 
-#tier-controls {
-  display: flex; flex-wrap: wrap; gap: 6px; padding: 6px 14px;
-  background: #fafaf8; border-bottom: 1px solid #e0ddd8; align-items: center;
-}
-.tctrl { display: flex; align-items: center; gap: 5px; }
-.tctrl label { font-size: 10px; font-weight: 700; color: #888; letter-spacing: 0.4px; text-transform: uppercase; display: flex; align-items: center; gap: 4px; }
-.tctrl .tdot { width: 7px; height: 7px; border-radius: 50%; }
-.tctrl input[type=range] { width: 58px; height: 3px; cursor: pointer; accent-color: #4a6cf7; }
-.tctrl .tv { font-size: 10px; color: #666; min-width: 14px; }
-.tcsep { width: 1px; height: 16px; background: #e8e5e0; }
+
 
 
 #drawing-bar {
@@ -253,6 +244,17 @@ html, body { height: 100%; font-family: -apple-system, BlinkMacSystemFont, 'Sego
 }
 .tog-btn:hover .tip { display: block; }
 
+#tier-controls {
+  display: flex; flex-wrap: wrap; gap: 6px; padding: 6px 14px;
+  background: #fafaf8; border-bottom: 1px solid #e0ddd8; align-items: center;
+}
+.tctrl { display: flex; align-items: center; gap: 5px; }
+.tctrl label { font-size: 10px; font-weight: 700; color: #888; letter-spacing: 0.4px; text-transform: uppercase; display: flex; align-items: center; gap: 4px; }
+.tctrl .tdot { width: 7px; height: 7px; border-radius: 50%; }
+.tctrl input[type=range] { width: 58px; height: 3px; cursor: pointer; accent-color: #4a6cf7; }
+.tctrl .tv { font-size: 10px; color: #666; min-width: 14px; }
+.tcsep { width: 1px; height: 16px; background: #e8e5e0; }
+
 /* Desktop: always show filters, hide mobile toggle */
 #toolbar-filters { display: flex; gap: 6px; align-items: center; }
 
@@ -306,6 +308,8 @@ html, body { height: 100%; font-family: -apple-system, BlinkMacSystemFont, 'Sego
   .action-btn { font-size: 12px; padding: 6px 12px; }
 
   /* ── Hide width controls on mobile — not useful ── */
+
+  /* ── Hide width controls on mobile — use settings modal instead ── */
   #tier-controls { display: none; }
 
   /* ── Drawing bar: stack onto two lines ── */
@@ -401,6 +405,66 @@ html, body { height: 100%; font-family: -apple-system, BlinkMacSystemFont, 'Sego
   .route-item { padding: 10px 10px; }
   .rdel, .rtog, .rrev, .rgpx { padding: 4px 5px; font-size: 14px; }
 }
+
+/* ── Settings modal ────────────────────────────────────────────── */
+#settings-overlay {
+  display: none; position: fixed; inset: 0;
+  background: rgba(20,20,30,0.45); z-index: 8000;
+  align-items: flex-end; justify-content: center;
+}
+#settings-overlay.open { display: flex; }
+
+#settings-modal {
+  background: #fff; width: 100%; max-width: 480px;
+  border-radius: 14px 14px 0 0;
+  padding: 0 0 env(safe-area-inset-bottom,0);
+  box-shadow: 0 -4px 32px rgba(0,0,0,0.18);
+  animation: slideUp 0.22s ease;
+}
+@keyframes slideUp {
+  from { transform: translateY(60px); opacity: 0; }
+  to   { transform: translateY(0);    opacity: 1; }
+}
+#settings-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 16px 18px 12px;
+  border-bottom: 1px solid #e8e5e0;
+}
+#settings-header h2 { font-size: 15px; font-weight: 700; color: #1a1a1a; }
+#settings-close {
+  font-size: 20px; color: #aaa; cursor: pointer;
+  line-height: 1; background: none; border: none; padding: 2px 6px;
+}
+#settings-close:hover { color: #333; }
+#settings-body { padding: 16px 18px 20px; }
+.settings-section-label {
+  font-size: 10px; font-weight: 700; color: #999;
+  text-transform: uppercase; letter-spacing: 0.5px;
+  margin-bottom: 12px; margin-top: 16px;
+}
+.settings-section-label:first-child { margin-top: 0; }
+.settings-row {
+  display: flex; align-items: center; gap: 10px; margin-bottom: 10px;
+}
+.settings-row label {
+  display: flex; align-items: center; gap: 7px;
+  font-size: 13px; font-weight: 500; color: #333;
+  min-width: 90px;
+}
+.settings-row .sdot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+.settings-row input[type=range] {
+  flex: 1; height: 4px; cursor: pointer; accent-color: #542788;
+}
+.settings-row .sval { font-size: 12px; color: #666; min-width: 28px; text-align: right; }
+
+/* Gear button in toolbar */
+#btn-settings {
+  font-size: 16px; padding: 4px 9px; border: 1px solid #d8d5cf;
+  border-radius: 5px; background: #fff; color: #666;
+  cursor: pointer; line-height: 1; flex-shrink: 0;
+  transition: all 0.12s;
+}
+#btn-settings:hover { background: #f4f3f0; border-color: #aaa; color: #333; }
 </style>
 </head>
 <body>
@@ -466,23 +530,28 @@ html, body { height: 100%; font-family: -apple-system, BlinkMacSystemFont, 'Sego
     </div><!-- /toolbar-filters -->
 
     <button id="btn-filter-toggle" onclick="toggleFilters()" aria-label="Toggle filters" style="display:none;">⚙ Filters</button>
+    <button id="btn-settings" onclick="openSettings()" title="Map settings" aria-label="Map settings">⚙️</button>
     <button class="action-btn" id="btn-draw" onclick="startDrawing()"><i class="ti ti-route"></i> Draw route</button>
   </div>
 
   <!-- Width controls -->
+
+
+
+
+  <!-- Width controls -->
   <div id="tier-controls">
     <span class="tlabel" style="margin-right:2px;">Width:</span>
-    <div class="tctrl"><label><div class="tdot" style="background:#542788"></div>Cycleway</label><input type="range" id="w-cy" min="1" max="5" value="3.5" step="0.5" oninput="setTierWidth('cy',this.value)"/><span class="tv" id="wv-cy">3.5</span></div>
+    <div class="tctrl"><label><div class="tdot" style="background:#542788"></div>Cycleway</label><input type="range" id="w-cy" min="1" max="5" value="3.5" step="0.5" oninput="setTierWidth('cy',this.value);if(document.getElementById('swv-cy'))document.getElementById('swv-cy').textContent=this.value;if(document.getElementById('sw-cy'))document.getElementById('sw-cy').value=this.value"/><span class="tv" id="wv-cy">3.5</span></div>
     <div class="tcsep"></div>
-    <div class="tctrl"><label><div class="tdot" style="background:#a67c52"></div>Gravel</label><input type="range" id="w-gr" min="1" max="5" value="1.5" step="0.5" oninput="setTierWidth('gr',this.value)"/><span class="tv" id="wv-gr">1.5</span></div>
+    <div class="tctrl"><label><div class="tdot" style="background:#a67c52"></div>Gravel</label><input type="range" id="w-gr" min="1" max="5" value="1.5" step="0.5" oninput="setTierWidth('gr',this.value);if(document.getElementById('swv-gr'))document.getElementById('swv-gr').textContent=this.value;if(document.getElementById('sw-gr'))document.getElementById('sw-gr').value=this.value"/><span class="tv" id="wv-gr">1.5</span></div>
     <div class="tcsep"></div>
-    <div class="tctrl"><label><div class="tdot" style="background:#998ec3"></div>Low</label><input type="range" id="w-t1" min="1" max="5" value="1.5" step="0.5" oninput="setTierWidth('t1',this.value)"/><span class="tv" id="wv-t1">1.5</span></div>
+    <div class="tctrl"><label><div class="tdot" style="background:#998ec3"></div>Low</label><input type="range" id="w-t1" min="1" max="5" value="1.5" step="0.5" oninput="setTierWidth('t1',this.value);if(document.getElementById('swv-t1'))document.getElementById('swv-t1').textContent=this.value;if(document.getElementById('sw-t1'))document.getElementById('sw-t1').value=this.value"/><span class="tv" id="wv-t1">1.5</span></div>
     <div class="tcsep"></div>
-    <div class="tctrl"><label><div class="tdot" style="background:#e08214"></div>Medium</label><input type="range" id="w-t2" min="1" max="5" value="1" step="0.5" oninput="setTierWidth('t2',this.value)"/><span class="tv" id="wv-t2">1</span></div>
+    <div class="tctrl"><label><div class="tdot" style="background:#e08214"></div>Medium</label><input type="range" id="w-t2" min="1" max="5" value="1" step="0.5" oninput="setTierWidth('t2',this.value);if(document.getElementById('swv-t2'))document.getElementById('swv-t2').textContent=this.value;if(document.getElementById('sw-t2'))document.getElementById('sw-t2').value=this.value"/><span class="tv" id="wv-t2">1</span></div>
     <div class="tcsep"></div>
-    <div class="tctrl"><label><div class="tdot" style="background:#b35806"></div>Heavy</label><input type="range" id="w-t3" min="1" max="5" value="0.8" step="0.1" oninput="setTierWidth('t3',this.value)"/><span class="tv" id="wv-t3">0.8</span></div>
+    <div class="tctrl"><label><div class="tdot" style="background:#b35806"></div>Heavy</label><input type="range" id="w-t3" min="1" max="5" value="0.8" step="0.1" oninput="setTierWidth('t3',this.value);if(document.getElementById('swv-t3'))document.getElementById('swv-t3').textContent=this.value;if(document.getElementById('sw-t3'))document.getElementById('sw-t3').value=this.value"/><span class="tv" id="wv-t3">0.8</span></div>
   </div>
-
 
   <!-- Drawing bar -->
   <div id="drawing-bar">
@@ -761,6 +830,7 @@ function renderRoads(raw){
     });
     updateVis();
     document.getElementById('load-overlay').style.display='none';
+    showWelcome();
     document.getElementById('status-bar').textContent=`${inc.toLocaleString()} segments · ${Object.keys(graph).length.toLocaleString()} routing nodes`;
     loadSavedRoutes();
   },50);
@@ -1078,6 +1148,23 @@ function closeWelcome(permanent){
 }
 
 
+
+// ─── Settings modal ───────────────────────────────────────────────────────────
+function openSettings(){
+  document.getElementById('settings-overlay').classList.add('open');
+  // Sync modal sliders to current tierWidths values
+  ['cy','gr','t1','t2','t3'].forEach(k => {
+    const el = document.getElementById('sw-'+k);
+    const val = document.getElementById('swv-'+k);
+    if(el) el.value = tierWidths[k];
+    if(val) val.textContent = tierWidths[k];
+  });
+}
+function closeSettings(e){
+  if(e && e.target !== document.getElementById('settings-overlay')) return;
+  document.getElementById('settings-overlay').classList.remove('open');
+}
+
 // ─── Mobile helpers ───────────────────────────────────────────────────────────
 function isMobile(){ return window.innerWidth <= 640; }
 
@@ -1154,9 +1241,46 @@ async function init(){
   setLS('Loading Burlington bike routes…','Fetching road data — usually takes 10–30 seconds');
   try{const data=await fetchRoads();renderRoads(data);}
   catch(e){showErr('Couldn\'t load road data. The map server may be busy — please try again in a moment.');}
-  showWelcome();
 }
 init();
 </script>
+
+  <!-- Settings modal -->
+  <div id="settings-overlay" onclick="closeSettings(event)">
+    <div id="settings-modal">
+      <div id="settings-header">
+        <h2>⚙️ Map Settings</h2>
+        <button id="settings-close" onclick="closeSettings()" aria-label="Close settings">×</button>
+      </div>
+      <div id="settings-body">
+        <div class="settings-section-label">Road width</div>
+        <div class="settings-row">
+          <label><div class="sdot" style="background:#542788"></div>Cycleway</label>
+          <input type="range" id="sw-cy" min="1" max="5" value="3.5" step="0.5" oninput="setTierWidth('cy',this.value);document.getElementById('swv-cy').textContent=this.value;if(document.getElementById('wv-cy'))document.getElementById('wv-cy').textContent=this.value;if(document.getElementById('w-cy'))document.getElementById('w-cy').value=this.value" />
+          <span class="sval" id="swv-cy">3.5</span>
+        </div>
+        <div class="settings-row">
+          <label><div class="sdot" style="background:#a67c52"></div>Gravel</label>
+          <input type="range" id="sw-gr" min="1" max="5" value="1.5" step="0.5" oninput="setTierWidth('gr',this.value);document.getElementById('swv-gr').textContent=this.value;if(document.getElementById('wv-gr'))document.getElementById('wv-gr').textContent=this.value;if(document.getElementById('w-gr'))document.getElementById('w-gr').value=this.value" />
+          <span class="sval" id="swv-gr">1.5</span>
+        </div>
+        <div class="settings-row">
+          <label><div class="sdot" style="background:#998ec3"></div>Low</label>
+          <input type="range" id="sw-t1" min="1" max="5" value="1.5" step="0.5" oninput="setTierWidth('t1',this.value);document.getElementById('swv-t1').textContent=this.value;if(document.getElementById('wv-t1'))document.getElementById('wv-t1').textContent=this.value;if(document.getElementById('w-t1'))document.getElementById('w-t1').value=this.value" />
+          <span class="sval" id="swv-t1">1.5</span>
+        </div>
+        <div class="settings-row">
+          <label><div class="sdot" style="background:#e08214"></div>Medium</label>
+          <input type="range" id="sw-t2" min="1" max="5" value="1" step="0.5" oninput="setTierWidth('t2',this.value);document.getElementById('swv-t2').textContent=this.value;if(document.getElementById('wv-t2'))document.getElementById('wv-t2').textContent=this.value;if(document.getElementById('w-t2'))document.getElementById('w-t2').value=this.value" />
+          <span class="sval" id="swv-t2">1</span>
+        </div>
+        <div class="settings-row">
+          <label><div class="sdot" style="background:#b35806"></div>Heavy</label>
+          <input type="range" id="sw-t3" min="1" max="5" value="0.8" step="0.1" oninput="setTierWidth('t3',this.value);document.getElementById('swv-t3').textContent=this.value;if(document.getElementById('wv-t3'))document.getElementById('wv-t3').textContent=this.value;if(document.getElementById('w-t3'))document.getElementById('w-t3').value=this.value" />
+          <span class="sval" id="swv-t3">0.8</span>
+        </div>
+      </div>
+    </div>
+  </div>
 </body>
 </html>
