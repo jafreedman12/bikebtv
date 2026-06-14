@@ -252,6 +252,155 @@ html, body { height: 100%; font-family: -apple-system, BlinkMacSystemFont, 'Sego
   border: 6px solid transparent; border-bottom-color: #222;
 }
 .tog-btn:hover .tip { display: block; }
+
+/* Desktop: always show filters, hide mobile toggle */
+#toolbar-filters { display: flex; gap: 6px; align-items: center; }
+
+/* ═══════════════════════════════════════════════════
+   MOBILE RESPONSIVE  (≤ 640px)
+   ═══════════════════════════════════════════════════ */
+@media (max-width: 640px) {
+
+  /* ── Toolbar: single row with toggle for filters ── */
+  #toolbar {
+    padding: 8px 12px;
+    gap: 6px;
+    flex-wrap: nowrap;
+    overflow: hidden;
+  }
+  #toolbar h1 { font-size: 13px; flex-shrink: 0; }
+  .sep { display: none; }
+  .tlabel { display: none; }
+
+  /* Hide tier group and draw btn normally; shown via JS toggle */
+  #toolbar-filters {
+    display: none;
+    width: 100%;
+    gap: 4px;
+    flex-wrap: wrap;
+    padding-top: 6px;
+    border-top: 1px solid #e0ddd8;
+    margin-top: 2px;
+  }
+  #toolbar-filters.open { display: flex; }
+
+  /* Filter toggle button */
+  #btn-filter-toggle {
+    margin-left: auto;
+    font-size: 11px;
+    padding: 5px 10px;
+    border: 1px solid #d8d5cf;
+    border-radius: 5px;
+    background: #fff;
+    color: #555;
+    cursor: pointer;
+    flex-shrink: 0;
+    font-weight: 600;
+  }
+  #btn-filter-toggle.open {
+    background: #f0eef8;
+    border-color: #998ec3;
+    color: #4a3a80;
+  }
+
+  .action-btn { font-size: 12px; padding: 6px 12px; }
+
+  /* ── Hide width controls on mobile — not useful ── */
+  #tier-controls { display: none; }
+
+  /* ── Drawing bar: stack onto two lines ── */
+  #drawing-bar {
+    padding: 6px 10px;
+    gap: 6px;
+  }
+  #drawing-bar > i { display: none; }
+  #drawing-bar > span:first-of-type { font-size: 11px; width: 100%; }
+  #route-name-input { width: 100%; min-width: 0; flex: 1; }
+
+  /* ── Tier breakdown: compact ── */
+  #tier-breakdown { padding: 4px 10px; }
+  .tb-bar { width: 100px; }
+
+  /* ── Map takes full width; side panel becomes bottom sheet ── */
+  #map-wrap { flex-direction: column; }
+  #map { width: 100%; flex: 1; }
+
+  #side-panel {
+    width: 100%;
+    height: 52px;           /* collapsed: just the header tab */
+    border-left: none;
+    border-top: 2px solid #e0ddd8;
+    position: relative;
+    transition: height 0.3s ease;
+    overflow: hidden;
+    flex-shrink: 0;
+    z-index: 600;
+  }
+  #side-panel.expanded { height: 55vh; overflow-y: auto; }
+
+  /* Drag handle / tab at top of side panel */
+  #side-panel-tab {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 14px;
+    height: 52px;
+    cursor: pointer;
+    background: #fff;
+    border-bottom: 1px solid #e0ddd8;
+    flex-shrink: 0;
+    user-select: none;
+  }
+  #side-panel-tab-label {
+    font-size: 13px;
+    font-weight: 600;
+    color: #1a1a1a;
+  }
+  #side-panel-tab-arrow {
+    font-size: 18px;
+    color: #aaa;
+    transition: transform 0.2s;
+  }
+  #side-panel.expanded #side-panel-tab-arrow { transform: rotate(180deg); }
+  #side-panel-tab-count {
+    font-size: 11px;
+    background: #542788;
+    color: #fff;
+    border-radius: 10px;
+    padding: 1px 7px;
+    margin-left: 6px;
+  }
+
+  /* ── Elevation panel: full width ── */
+  #elev-panel { right: 0; }
+
+  /* ── Status bar: smaller ── */
+  #status-bar {
+    font-size: 10px;
+    padding: 3px 10px;
+    max-width: 70%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* ── Tooltips: disable on mobile (no hover) ── */
+  .tog-btn .tip { display: none !important; }
+
+  /* ── Welcome modal: full screen on mobile ── */
+  #welcome-box { border-radius: 0; max-height: 100vh; overflow-y: auto; }
+  #welcome-overlay { padding: 0; align-items: flex-end; }
+  #welcome-hero { padding: 20px 20px 16px; }
+  #welcome-hero h1 { font-size: 17px; }
+  #welcome-body { padding: 16px 20px 20px; }
+  #welcome-footer { padding: 0 20px 28px; }
+
+  /* ── Larger tap targets ── */
+  .tog-btn { padding: 7px 10px; font-size: 12px; }
+  .dbar-btn { padding: 7px 12px; font-size: 12px; }
+  .route-item { padding: 10px 10px; }
+  .rdel, .rtog, .rrev, .rgpx { padding: 4px 5px; font-size: 14px; }
+}
 </style>
 </head>
 <body>
@@ -306,8 +455,7 @@ html, body { height: 100%; font-family: -apple-system, BlinkMacSystemFont, 'Sego
   <!-- Toolbar -->
   <div id="toolbar">
     <h1>🚲 Burlington Bike Routes</h1>
-    <div class="sep"></div>
-    <span class="tlabel">Tier</span>
+    <div id="toolbar-filters">
     <div class="tgroup">
       <button class="tog-btn active cy"  id="btn-cy" onclick="toggleLayer('cy')"><div class="dot" style="background:#542788"></div>Cycleway<span class="tip"><strong>Cycleways</strong><br>Dedicated paved bike paths & separated bike lanes</span></button>
       <button class="tog-btn gr"        id="btn-gr" onclick="toggleLayer('gr')"><div class="dot" style="background:#a67c52"></div>Gravel<span class="tip"><strong>Gravel / Unpaved</strong><br>Tracks, dirt roads & gravel paths</span></button>
@@ -315,8 +463,9 @@ html, body { height: 100%; font-family: -apple-system, BlinkMacSystemFont, 'Sego
       <button class="tog-btn med"        id="btn-t2" onclick="toggleLayer('t2')"><div class="dot" style="background:#e08214"></div>Medium<span class="tip"><strong>Medium traffic</strong><br>Secondary & tertiary roads — shared with cars</span></button>
       <button class="tog-btn heavy"      id="btn-t3" onclick="toggleLayer('t3')"><div class="dot" style="background:#b35806"></div>Heavy<span class="tip"><strong>Heavy traffic</strong><br>Busy arterials — hidden by default</span></button>
     </div>
+    </div><!-- /toolbar-filters -->
 
-    <div class="sep"></div>
+    <button id="btn-filter-toggle" onclick="toggleFilters()" aria-label="Toggle filters" style="display:none;">⚙ Filters</button>
     <button class="action-btn" id="btn-draw" onclick="startDrawing()"><i class="ti ti-route"></i> Draw route</button>
   </div>
 
@@ -369,6 +518,10 @@ html, body { height: 100%; font-family: -apple-system, BlinkMacSystemFont, 'Sego
 
     <!-- Side panel -->
     <div id="side-panel">
+      <div id="side-panel-tab" onclick="toggleSidePanel()" role="button" aria-label="Toggle routes panel">
+        <span id="side-panel-tab-label">Saved Routes <span id="side-panel-tab-count" style="display:none;"></span></span>
+        <span id="side-panel-tab-arrow">⌃</span>
+      </div>
       <div class="psec">
         <h2>Saved Routes</h2>
         <div id="route-list"><div id="no-routes">No routes yet — draw one!</div></div>
@@ -798,7 +951,7 @@ async function finishRoute(){
   poly.addTo(map);wpMarkers.forEach(m=>map.removeLayer(m));
   if(snapIndicator){map.removeLayer(snapIndicator);snapIndicator=null;}
   const route={name,color,points:allCoords,dist,tierDist,id:Date.now(),poly};
-  savedRoutes.push(route);persistRoutes();renderRouteList();
+  savedRoutes.push(route);persistRoutes();renderRouteList();updateSidePanelTab();mobileExpandSidePanel();
   drawingMode=false;drawWaypoints=[];drawLegs=[];wpMarkers=[];
   document.getElementById('drawing-bar').classList.remove('visible');
   document.getElementById('tier-breakdown').classList.remove('visible');
@@ -892,7 +1045,7 @@ function focusRoute(id){
 function deleteRoute(id){
   const idx=savedRoutes.findIndex(x=>x.id===id);if(idx<0)return;
   if(savedRoutes[idx].poly)map.removeLayer(savedRoutes[idx].poly);
-  savedRoutes.splice(idx,1);persistRoutes();renderRouteList();
+  savedRoutes.splice(idx,1);persistRoutes();renderRouteList();updateSidePanelTab();
   if(!savedRoutes.length)document.getElementById('route-stats').style.display='none';
 }
 function persistRoutes(){try{localStorage.setItem('bvt_routes',JSON.stringify(savedRoutes.map(r=>({id:r.id,name:r.name,color:r.color,dist:r.dist,tierDist:r.tierDist||{},hidden:r.hidden||false,points:r.points}))));}catch(e){}}
@@ -904,21 +1057,67 @@ function loadSavedRoutes(){
       if(!r.hidden) poly.addTo(map);
       savedRoutes.push({...r,poly});
     });
-    if(savedRoutes.length)renderRouteList();
+    if(savedRoutes.length){renderRouteList();updateSidePanelTab();}
   }catch(e){}
 }
 
 
 // ─── Welcome modal ────────────────────────────────────────────────────────────
+let _welcomeShown = false; // session flag — resets only on full page reload
+
 function showWelcome(){
+  if(_welcomeShown) return; // already shown this session
   if(localStorage.getItem('bvt_welcome_dismissed')==='true') return;
+  _welcomeShown = true;
   document.getElementById('welcome-overlay').classList.remove('hidden');
 }
 function closeWelcome(permanent){
+  _welcomeShown = true; // mark as shown so it never reappears this session
   document.getElementById('welcome-overlay').classList.add('hidden');
   if(permanent) localStorage.setItem('bvt_welcome_dismissed','true');
 }
 
+
+// ─── Mobile helpers ───────────────────────────────────────────────────────────
+function isMobile(){ return window.innerWidth <= 640; }
+
+function toggleFilters(){
+  const filters = document.getElementById('toolbar-filters');
+  const btn = document.getElementById('btn-filter-toggle');
+  const open = filters.classList.toggle('open');
+  btn.classList.toggle('open', open);
+  btn.textContent = open ? '✕ Close' : '⚙ Filters';
+}
+
+function toggleSidePanel(){
+  if(!isMobile()) return;
+  document.getElementById('side-panel').classList.toggle('expanded');
+}
+
+// Auto-expand side panel on mobile when a route is saved
+function mobileExpandSidePanel(){
+  if(isMobile()) document.getElementById('side-panel').classList.add('expanded');
+}
+
+// Update the count badge on the tab
+function updateSidePanelTab(){
+  const count = savedRoutes.length;
+  const badge = document.getElementById('side-panel-tab-count');
+  if(badge){
+    badge.textContent = count;
+    badge.style.display = count > 0 ? 'inline-block' : 'none';
+  }
+}
+
+// On desktop, ensure side panel is always visible
+function handleResize(){
+  const panel = document.getElementById('side-panel');
+  if(!isMobile()){
+    panel.style.height = '';
+    panel.classList.remove('expanded');
+  }
+}
+window.addEventListener('resize', handleResize);
 // ─── Init ─────────────────────────────────────────────────────────────────────
 async function init(){
   map=L.map('map',{center:[44.478,-73.213],zoom:14});
