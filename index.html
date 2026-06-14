@@ -1,0 +1,680 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Burlington VT Bike Route Planner</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.0.0/tabler-icons.min.css" />
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f4f3f0; color: #1a1a1a; }
+  #app { display: flex; flex-direction: column; height: 100vh; }
+  #toolbar {
+    background: #fff; border-bottom: 1px solid #e0ddd8; padding: 8px 14px;
+    display: flex; flex-wrap: wrap; gap: 6px; align-items: center;
+    z-index: 1000; box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+  }
+  #toolbar h1 { font-size: 14px; font-weight: 600; color: #1a1a1a; margin-right: 2px; }
+  .tlabel { font-size: 10px; font-weight: 700; color: #999; letter-spacing: 0.5px; text-transform: uppercase; white-space: nowrap; }
+  .tgroup { display: flex; gap: 3px; align-items: center; }
+  .sep { width: 1px; height: 20px; background: #e0ddd8; margin: 0 4px; }
+  .tog-btn {
+    font-size: 11px; padding: 4px 9px; border: 1px solid #d8d5cf; border-radius: 5px;
+    background: #fff; color: #888; cursor: pointer; transition: all 0.12s;
+    display: flex; align-items: center; gap: 4px; white-space: nowrap; line-height: 1;
+  }
+  .tog-btn .dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+  .tog-btn:hover { background: #f4f3f0; border-color: #aaa; }
+  .tog-btn.active        { background: #eef3ff; border-color: #4a6cf7; color: #1a3acc; font-weight: 600; }
+  .tog-btn.active.cy     { background: #fff0f8; border-color: #e040a0; color: #a0006a; }
+  .tog-btn.active.gr     { background: #f5f0fb; border-color: #7c5cbf; color: #4a3380; }
+  .tog-btn.active.low    { background: #eef3ff; border-color: #4a6cf7; color: #1a3acc; }
+  .tog-btn.active.med    { background: #eaf5ea; border-color: #2a8a2a; color: #1a5a1a; }
+  .tog-btn.active.heavy  { background: #fff6ee; border-color: #ff7a00; color: #b84e00; }
+  .action-btn {
+    font-size: 11px; padding: 4px 10px; border: 1px solid #4a6cf7; border-radius: 5px;
+    background: #4a6cf7; color: #fff; cursor: pointer; font-weight: 600;
+    display: flex; align-items: center; gap: 4px; transition: background 0.12s;
+  }
+  .action-btn:hover { background: #2a4cd7; }
+  #tier-controls {
+    display: flex; flex-wrap: wrap; gap: 6px; padding: 6px 14px;
+    background: #fafaf8; border-bottom: 1px solid #e0ddd8; align-items: center;
+  }
+  .tctrl { display: flex; align-items: center; gap: 5px; }
+  .tctrl label { font-size: 10px; font-weight: 700; color: #888; letter-spacing: 0.4px; text-transform: uppercase; display: flex; align-items: center; gap: 4px; }
+  .tctrl .tdot { width: 7px; height: 7px; border-radius: 50%; }
+  .tctrl input[type=range] { width: 58px; height: 3px; cursor: pointer; accent-color: #4a6cf7; }
+  .tctrl .tv { font-size: 10px; color: #666; min-width: 14px; }
+  .tcsep { width: 1px; height: 16px; background: #e8e5e0; }
+  #drawing-bar {
+    display: none; background: #eef3ff; border-bottom: 1px solid #b8c8f8;
+    padding: 7px 14px; font-size: 12px; color: #1a3acc;
+    align-items: center; gap: 8px; flex-wrap: wrap;
+  }
+  #drawing-bar.visible { display: flex; }
+  #route-name-input {
+    font-size: 11px; padding: 3px 9px; border: 1px solid #b8c8f8; border-radius: 5px;
+    background: #fff; color: #1a1a1a; width: 130px; outline: none;
+  }
+  #route-name-input:focus { border-color: #4a6cf7; }
+  #draw-dist { font-size: 11px; color: #4a6cf7; font-weight: 600; margin-left: auto; }
+  .dbar-btn {
+    font-size: 11px; padding: 3px 10px; border: 1px solid #4a6cf7;
+    border-radius: 5px; cursor: pointer; font-weight: 600; transition: all 0.12s;
+  }
+  .dbar-btn.finish { background: #4a6cf7; color: #fff; }
+  .dbar-btn.finish:hover { background: #2a4cd7; }
+  .dbar-btn.cancel { background: #fff; color: #666; border-color: #ccc; }
+  .dbar-btn.cancel:hover { background: #f4f3f0; }
+  #routing-pill {
+    display: none; font-size: 10px; padding: 2px 8px; border-radius: 10px;
+    font-weight: 600; border: 1px solid;
+  }
+  #routing-pill.routing { background: #fffbe6; border-color: #ffe066; color: #7a6000; }
+  #routing-pill.gap     { background: #fff0f0; border-color: #ffb0b0; color: #900; }
+  #routing-pill.snapped { background: #f0fff4; border-color: #88e0a0; color: #1a6a30; }
+  #map-wrap { flex: 1; display: flex; position: relative; overflow: hidden; }
+  #map { flex: 1; }
+  .leaflet-tile-pane { transition: opacity 0.2s; }
+  #side-panel {
+    width: 248px; background: #fff; border-left: 1px solid #e0ddd8;
+    display: flex; flex-direction: column; overflow: hidden;
+  }
+  .psec { padding: 12px 14px; border-bottom: 1px solid #e0ddd8; }
+  .psec h2 { font-size: 11px; font-weight: 700; color: #999; letter-spacing: 0.5px; text-transform: uppercase; margin-bottom: 9px; }
+  .route-item {
+    display: flex; align-items: center; gap: 7px; padding: 7px 9px;
+    border-radius: 6px; margin-bottom: 4px; border: 1px solid #e8e5e0; cursor: pointer; transition: all 0.12s;
+  }
+  .route-item:hover { background: #f8f7f5; border-color: #ccc; }
+  .route-item.active-route { border-color: #4a6cf7; background: #eef3ff; }
+  .rdot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+  .rinfo { flex: 1; min-width: 0; }
+  .rname { font-size: 12px; font-weight: 600; color: #1a1a1a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .rmeta { font-size: 10px; color: #888; margin-top: 1px; }
+  .rdel { font-size: 16px; line-height: 1; color: #ccc; cursor: pointer; padding: 0 2px; }
+  .rdel:hover { color: #d64040; }
+  #no-routes { font-size: 12px; color: #bbb; padding: 3px 1px; }
+  #route-stats { font-size: 12px; color: #444; padding: 10px 14px; background: #fafaf8; border-top: 1px solid #e0ddd8; }
+  .srow { display: flex; justify-content: space-between; margin-bottom: 3px; }
+  .slbl { color: #888; font-size: 11px; }
+  .sval { font-weight: 600; font-size: 11px; }
+  #legend { padding: 12px 14px; flex: 1; overflow-y: auto; }
+  #legend h2 { font-size: 11px; font-weight: 700; color: #999; letter-spacing: 0.5px; text-transform: uppercase; margin-bottom: 9px; }
+  .leg-row { display: flex; align-items: flex-start; gap: 9px; margin-bottom: 7px; }
+  .lline { width: 26px; height: 4px; border-radius: 2px; flex-shrink: 0; margin-top: 4px; }
+  .ltext strong { color: #1a1a1a; font-weight: 700; display: block; font-size: 11px; }
+  .ltext span { font-size: 10px; color: #888; }
+  #load-overlay {
+    position: absolute; inset: 0; background: rgba(244,243,240,0.96);
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    z-index: 2000; gap: 12px; text-align: center; padding: 20px;
+  }
+  .spinner { width: 32px; height: 32px; border: 3px solid #ddd; border-top-color: #4a6cf7; border-radius: 50%; animation: spin 0.8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  #lmsg { font-size: 14px; font-weight: 600; color: #333; }
+  #lsub { font-size: 11px; color: #999; max-width: 300px; line-height: 1.5; }
+  #retry-btn {
+    display: none; margin-top: 4px; padding: 7px 18px;
+    background: #4a6cf7; color: #fff; border: none;
+    border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600;
+  }
+  #retry-btn:hover { background: #2a4cd7; }
+  #status-bar {
+    position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%);
+    background: rgba(255,255,255,0.94); border: 1px solid #ddd; border-radius: 20px;
+    padding: 4px 13px; font-size: 11px; color: #666; z-index: 500;
+    pointer-events: none; white-space: nowrap; box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+  }
+  .op-wrap { display: flex; align-items: center; gap: 5px; }
+  .op-wrap input[type=range] { width: 68px; height: 3px; cursor: pointer; accent-color: #4a6cf7; }
+  .op-wrap .ov { font-size: 11px; color: #666; min-width: 30px; }
+  .leaflet-popup-content-wrapper { border-radius: 7px; box-shadow: 0 2px 10px rgba(0,0,0,0.12); }
+  .leaflet-popup-content { font-size: 12px; line-height: 1.5; }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="toolbar">
+    <h1>🚲 Burlington Bike Routes</h1>
+    <div class="sep"></div>
+    <span class="tlabel">Tier</span>
+    <div class="tgroup">
+      <button class="tog-btn active cy"   id="btn-cy" onclick="toggleLayer('cy')"><div class="dot" style="background:#e040a0"></div>Cycleway</button>
+      <button class="tog-btn active gr"   id="btn-gr" onclick="toggleLayer('gr')"><div class="dot" style="background:#7c5cbf"></div>Gravel</button>
+      <button class="tog-btn active low"  id="btn-t1" onclick="toggleLayer('t1')"><div class="dot" style="background:#4a6cf7"></div>Low</button>
+      <button class="tog-btn active med"  id="btn-t2" onclick="toggleLayer('t2')"><div class="dot" style="background:#2a8a2a"></div>Medium</button>
+      <button class="tog-btn heavy"       id="btn-t3" onclick="toggleLayer('t3')"><div class="dot" style="background:#ff7a00"></div>Heavy</button>
+    </div>
+    <div class="sep"></div>
+    <span class="tlabel">Map opacity</span>
+    <div class="op-wrap">
+      <input type="range" id="opacity-slider" min="10" max="100" value="100" step="5" oninput="updateOpacity(this.value)" />
+      <span class="ov" id="opacity-val">100%</span>
+    </div>
+    <div class="sep"></div>
+    <button class="action-btn" id="btn-draw" onclick="startDrawing()"><i class="ti ti-route"></i> Draw route</button>
+  </div>
+
+  <div id="tier-controls">
+    <span class="tlabel" style="margin-right:2px;">Width:</span>
+    <div class="tctrl"><label><div class="tdot" style="background:#e040a0"></div>Cycleway</label><input type="range" id="w-cy" min="1" max="5" value="4" step="1" oninput="setTierWidth('cy',this.value)"/><span class="tv" id="wv-cy">4</span></div>
+    <div class="tcsep"></div>
+    <div class="tctrl"><label><div class="tdot" style="background:#7c5cbf"></div>Gravel</label><input type="range" id="w-gr" min="1" max="5" value="3" step="1" oninput="setTierWidth('gr',this.value)"/><span class="tv" id="wv-gr">3</span></div>
+    <div class="tcsep"></div>
+    <div class="tctrl"><label><div class="tdot" style="background:#4a6cf7"></div>Low</label><input type="range" id="w-t1" min="1" max="5" value="3" step="1" oninput="setTierWidth('t1',this.value)"/><span class="tv" id="wv-t1">3</span></div>
+    <div class="tcsep"></div>
+    <div class="tctrl"><label><div class="tdot" style="background:#2a8a2a"></div>Medium</label><input type="range" id="w-t2" min="1" max="5" value="2" step="1" oninput="setTierWidth('t2',this.value)"/><span class="tv" id="wv-t2">2</span></div>
+    <div class="tcsep"></div>
+    <div class="tctrl"><label><div class="tdot" style="background:#ff7a00"></div>Heavy</label><input type="range" id="w-t3" min="1" max="5" value="1" step="1" oninput="setTierWidth('t3',this.value)"/><span class="tv" id="wv-t3">1</span></div>
+  </div>
+
+  <div id="drawing-bar">
+    <i class="ti ti-pencil-plus" style="font-size:14px;"></i>
+    <span>Click near any road or cycleway — routes follow the map, gaps bridge automatically</span>
+    <span id="routing-pill"></span>
+    <input type="text" id="route-name-input" placeholder="Name this route…" />
+    <button class="dbar-btn finish" onclick="finishRoute()">Save route</button>
+    <button class="dbar-btn cancel" onclick="cancelDrawing()">Cancel</button>
+    <span id="draw-dist"></span>
+  </div>
+
+  <div id="map-wrap">
+    <div id="map"></div>
+    <div id="side-panel">
+      <div class="psec">
+        <h2>Saved Routes</h2>
+        <div id="route-list"><div id="no-routes">No routes yet — draw one!</div></div>
+      </div>
+      <div id="route-stats" style="display:none;"></div>
+      <div id="legend">
+        <h2>Legend</h2>
+        <div class="leg-row"><div class="lline" style="background:#e040a0;height:5px;"></div><div class="ltext"><strong>Cycleway</strong><span>Dedicated paved bike infrastructure</span></div></div>
+        <div class="leg-row"><div class="lline" style="background:repeating-linear-gradient(90deg,#7c5cbf 0,#7c5cbf 5px,transparent 5px,transparent 9px);height:4px;"></div><div class="ltext"><strong>Gravel / unpaved</strong><span>All unpaved surfaces incl. gravel cycleways</span></div></div>
+        <div class="leg-row"><div class="lline" style="background:#4a6cf7;height:4px;"></div><div class="ltext"><strong>Low traffic</strong><span>Residential, service, paths (dead ends removed)</span></div></div>
+        <div class="leg-row"><div class="lline" style="background:#2a8a2a;height:3px;"></div><div class="ltext"><strong>Medium traffic</strong><span>Tertiary &amp; secondary roads</span></div></div>
+        <div class="leg-row"><div class="lline" style="background:#ff7a00;height:2px;"></div><div class="ltext"><strong>Heavy traffic</strong><span>Primary roads &amp; arterials</span></div></div>
+        <div style="margin-top:8px;padding:7px 9px;background:#f0f4ff;border-radius:5px;border:1px solid #b8c8f8;">
+          <div style="font-size:10px;color:#1a3acc;line-height:1.6;">
+            <strong style="display:block;margin-bottom:2px;">Local graph routing</strong>
+            Routes are traced along the actual loaded OSM segments using a local shortest-path search — so cycleways, gravel tracks, and roads are all treated equally. OSRM is used as a fallback. Unconnected gaps bridge automatically.
+          </div>
+        </div>
+        <div style="margin-top:7px;padding-top:8px;border-top:1px solid #e8e5e0;font-size:10px;color:#bbb;line-height:1.6;">
+          Data: <a href="https://www.openstreetmap.org" target="_blank" style="color:#4a6cf7;">OpenStreetMap</a> via Overpass API.<br>
+          Routing: local graph + <a href="https://project-osrm.org" target="_blank" style="color:#4a6cf7;">OSRM</a> fallback.<br>
+          Region: St. Albans → Hinesburg → Waterbury.
+        </div>
+      </div>
+    </div>
+    <div id="load-overlay">
+      <div class="spinner" id="load-spinner"></div>
+      <div id="lmsg">Loading map…</div>
+      <div id="lsub">Fetching road data from OpenStreetMap</div>
+      <button id="retry-btn" onclick="retryFetch()">Try again</button>
+    </div>
+    <div id="status-bar">St. Albans → Hinesburg → Waterbury region</div>
+  </div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+// ─── Config ───────────────────────────────────────────────────────────────────
+const OVERPASS_MIRRORS = [
+  'https://overpass-api.de/api/interpreter',
+  'https://overpass.kumi.systems/api/interpreter',
+  'https://maps.mail.ru/osm/tools/overpass/api/interpreter'
+];
+const OSRM_BASE = 'https://router.project-osrm.org/route/v1/cycling';
+const BBOX = '44.27,-73.35,44.80,-72.85';
+const SNAP_R = 100;          // metres — cursor snap radius
+const GRAPH_SNAP_R = 200;    // metres — how far to search for graph nodes at each end
+const DETOUR_RATIO_MAX = 3.0;
+const LEG_DIST_MAX_KM  = 5;
+
+const TIER_COLORS = { cy:'#e040a0', gr:'#7c5cbf', t1:'#4a6cf7', t2:'#2a8a2a', t3:'#ff7a00' };
+const tierWidths  = { cy:4, gr:3, t1:3, t2:2, t3:1 };
+const ROUTE_COLORS = ['#e63946','#2a9d8f','#f4a261','#8338ec','#06d6a0','#ef476f','#ffb703','#023047'];
+const UNPAVED_SURFACES = new Set(['unpaved','gravel','dirt','grass','mud','sand','compacted',
+  'fine_gravel','ground','earth','wood','pebblestone','cobblestone','sett','woodchips']);
+
+// ─── State ────────────────────────────────────────────────────────────────────
+let map;
+let roadLayers   = [];   // [{layer, tier}]
+let snapPoints   = [];   // [{lat,lng}] — every node for cursor snapping
+// Local routing graph: nodeKey -> [{toKey, dist, coords:[{lat,lng}]}]
+let graph        = {};
+// nodeKey -> {lat,lng}
+let nodeCoords   = {};
+let savedRoutes  = [];
+let drawingMode  = false;
+let wpMarkers    = [], drawLegs = [], drawWaypoints = [], snapIndicator = null;
+let layerVisibility = { cy:true, gr:true, t1:true, t2:true, t3:false };
+
+// ─── Math ─────────────────────────────────────────────────────────────────────
+function hvM(a,b) {
+  const R=6371000,r=Math.PI/180;
+  const dLat=(b.lat-a.lat)*r,dLon=(b.lng-a.lng)*r;
+  const aa=Math.sin(dLat/2)**2+Math.cos(a.lat*r)*Math.cos(b.lat*r)*Math.sin(dLon/2)**2;
+  return R*2*Math.atan2(Math.sqrt(aa),Math.sqrt(1-aa));
+}
+const hvKm=(a,b)=>hvM(a,b)/1000;
+// Precision-4 key (~11m grid) — coarse enough to merge nearby OSM nodes
+function nk(lat,lng){ return lat.toFixed(4)+','+lng.toFixed(4); }
+
+// ─── Classification ───────────────────────────────────────────────────────────
+function shouldInclude(tags) {
+  const hw=tags.highway||'', bk=tags.bicycle||'';
+  if (['motorway','motorway_link','steps'].includes(hw)) return false;
+  if (hw==='footway') return ['yes','designated','permissive','official'].includes(bk)||tags.segregated==='yes';
+  if (hw==='pedestrian') return ['yes','designated','permissive'].includes(bk);
+  if (hw==='path'&&bk==='no') return false;
+  return ['cycleway','path','bridleway','track','living_street','residential',
+          'unclassified','service','tertiary','tertiary_link','secondary','secondary_link',
+          'primary','primary_link','trunk','trunk_link'].includes(hw);
+}
+function classifyWay(tags) {
+  const hw=tags.highway||'', bk=tags.bicycle||'';
+  if (UNPAVED_SURFACES.has(tags.surface||'')||['track','bridleway'].includes(hw)) return 'gr';
+  if (hw==='cycleway') return 'cy';
+  if (hw==='path'&&['designated','official'].includes(bk)) return 'cy';
+  if (['path','living_street','residential','unclassified','service'].includes(hw)) return 't1';
+  if (['tertiary','tertiary_link','secondary','secondary_link'].includes(hw)) return 't2';
+  return 't3';
+}
+
+// ─── Dead-end filter ──────────────────────────────────────────────────────────
+function filterDeadEnds(elements) {
+  const epCount={};
+  elements.forEach(el=>{
+    if (el.type!=='way'||!el.geometry||!el.tags) return;
+    if (!shouldInclude(el.tags)) return;
+    const g=el.geometry;
+    const s=nk(g[0].lat,g[0].lon), e=nk(g[g.length-1].lat,g[g.length-1].lon);
+    epCount[s]=(epCount[s]||0)+1; epCount[e]=(epCount[e]||0)+1;
+  });
+  function lenM(g){ let d=0; for(let i=1;i<g.length;i++) d+=hvM({lat:g[i-1].lat,lng:g[i-1].lon},{lat:g[i].lat,lng:g[i].lon}); return d; }
+  return elements.filter(el=>{
+    if (el.type!=='way'||!el.geometry||!el.tags) return true;
+    if (!shouldInclude(el.tags)) return true;
+    if (classifyWay(el.tags)!=='t1') return true;
+    const g=el.geometry;
+    const s=nk(g[0].lat,g[0].lon), e=nk(g[g.length-1].lat,g[g.length-1].lon);
+    const dead=(epCount[s]||0)<=1||(epCount[e]||0)<=1;
+    return !dead||lenM(g)>=150;
+  });
+}
+
+// ─── Build local routing graph ────────────────────────────────────────────────
+// Graph nodes are endpoints of every included way (start and end of each segment).
+// Edges are the full polyline of each way (bidirectional).
+// We store the intermediate shape coords so we can draw the path accurately.
+function buildGraph(elements) {
+  graph={}; nodeCoords={}; snapPoints=[];
+
+  elements.forEach(el=>{
+    if (el.type!=='way'||!el.geometry||!el.tags) return;
+    if (!shouldInclude(el.tags)) return;
+    const geo=el.geometry;
+    const coords=geo.map(p=>({lat:p.lat,lng:p.lon}));
+
+    // Register every node as a snap point and graph vertex
+    coords.forEach(c=>{
+      snapPoints.push(c);
+      nodeCoords[nk(c.lat,c.lng)]=c;
+    });
+
+    // Add a graph edge for every consecutive pair of nodes along the way.
+    // This means every intermediate shape point becomes a routable vertex —
+    // critical for cycleways and paths that have many shape nodes but whose
+    // midpoints would otherwise be unreachable by Dijkstra.
+    for (let i=0; i<coords.length-1; i++) {
+      const ak=nk(coords[i].lat,  coords[i].lng);
+      const bk=nk(coords[i+1].lat,coords[i+1].lng);
+      const d=hvM(coords[i],coords[i+1]);
+      const seg=[coords[i],coords[i+1]];
+      if (!graph[ak]) graph[ak]=[];
+      if (!graph[bk]) graph[bk]=[];
+      graph[ak].push({to:bk, dist:d, coords:seg});
+      graph[bk].push({to:ak, dist:d, coords:[...seg].reverse()});
+    }
+  });
+}
+
+// ─── Dijkstra shortest path ───────────────────────────────────────────────────
+// Returns {coords, dist} or null if no path found within maxDist km
+function dijkstra(startKey, endKey, maxDistKm=30) {
+  if (startKey===endKey) return {coords:[nodeCoords[startKey]],dist:0};
+  if (!graph[startKey]||!graph[endKey]) return null;
+
+  const dist={[startKey]:0};
+  const prev={};
+  const prevCoords={};
+  // Min-heap via sorted array (good enough for local searches)
+  const queue=[{key:startKey,d:0}];
+
+  while (queue.length) {
+    queue.sort((a,b)=>a.d-b.d);
+    const {key,d}=queue.shift();
+    if (d>dist[key]) continue;
+    if (key===endKey) break;
+    if (d>maxDistKm*1000) break;
+
+    for (const edge of (graph[key]||[])) {
+      const nd=d+edge.dist;
+      if (nd<(dist[edge.to]??Infinity)) {
+        dist[edge.to]=nd;
+        prev[edge.to]=key;
+        prevCoords[edge.to]=edge.coords;
+        queue.push({key:edge.to,d:nd});
+      }
+    }
+  }
+
+  if (dist[endKey]===undefined) return null;
+
+  // Reconstruct path
+  let path=[], cur=endKey;
+  while (cur!==startKey) {
+    const seg=prevCoords[cur];
+    if (!seg) return null;
+    // seg goes from prev[cur] → cur, prepend in reverse
+    path=[...seg.slice(0,-1),...path];
+    cur=prev[cur];
+  }
+  path=[nodeCoords[startKey],...path,nodeCoords[endKey]];
+  return {coords:path, dist:dist[endKey]/1000};
+}
+
+// Find nearest graph node key within radius
+function nearestNode(pt, radiusM) {
+  let bestK=null, bestD=Infinity;
+  for (const [k,c] of Object.entries(nodeCoords)) {
+    const d=hvM(pt,c);
+    if (d<bestD&&d<=radiusM) { bestD=d; bestK=k; }
+  }
+  return bestK;
+}
+
+// ─── Overpass ─────────────────────────────────────────────────────────────────
+async function fetchMirror(url,query) {
+  const ctrl=new AbortController(), t=setTimeout(()=>ctrl.abort(),55000);
+  try {
+    const r=await fetch(url+'?data='+encodeURIComponent(query),{signal:ctrl.signal});
+    clearTimeout(t); if(!r.ok) throw new Error('HTTP '+r.status); return r.json();
+  } catch(e) { clearTimeout(t); throw e; }
+}
+async function fetchRoads() {
+  const q=`[out:json][timeout:60];(way["highway"~"^(cycleway|path|bridleway|track|living_street|residential|unclassified|service|tertiary|tertiary_link|secondary|secondary_link|primary|primary_link|trunk|trunk_link|footway|pedestrian)$"](${BBOX}););out geom;`;
+  for (let i=0;i<OVERPASS_MIRRORS.length;i++) {
+    setLS(`Trying server ${i+1}/${OVERPASS_MIRRORS.length}…`,OVERPASS_MIRRORS[i].replace('https://','').split('/')[0]);
+    try { return await fetchMirror(OVERPASS_MIRRORS[i],q); }
+    catch(e) { if(i<OVERPASS_MIRRORS.length-1){setLS('Trying next server…','');await new Promise(r=>setTimeout(r,1200));} }
+  }
+  throw new Error('All mirrors failed');
+}
+function setLS(m,s){ document.getElementById('lmsg').textContent=m; if(s!==undefined) document.getElementById('lsub').textContent=s; }
+function showErr(m) {
+  document.getElementById('load-spinner').style.display='none';
+  setLS('Could not load road data',m||'Check your connection.');
+  document.getElementById('retry-btn').style.display='inline-block';
+}
+function retryFetch(){ document.getElementById('load-spinner').style.display=''; document.getElementById('retry-btn').style.display='none'; setLS('Retrying…',''); fetchRoads().then(renderRoads).catch(e=>showErr(e.message)); }
+
+// ─── Render ───────────────────────────────────────────────────────────────────
+function renderRoads(raw) {
+  roadLayers.forEach(r=>map.removeLayer(r.layer));
+  roadLayers=[]; snapPoints=[]; graph={}; nodeCoords={};
+  setLS('Filtering dead ends…','');
+  const els=filterDeadEnds(raw.elements);
+  setLS('Building routing graph…',`${els.length.toLocaleString()} segments`);
+  setTimeout(()=>{
+    buildGraph(els);
+    setLS('Rendering…','');
+    let inc=0,exc=0;
+    els.forEach(el=>{
+      if (el.type!=='way'||!el.geometry) return;
+      const tags=el.tags||{};
+      if (!shouldInclude(tags)){exc++;return;}
+      const tier=classifyWay(tags);
+      const lls=el.geometry.map(p=>[p.lat,p.lon]);
+      const color=TIER_COLORS[tier], weight=tierWidths[tier];
+      const opts={color,weight,opacity:tier==='t3'?0.6:0.78};
+      if (tier==='gr') opts.dashArray='7 5';
+      const line=L.polyline(lls,opts);
+      const nm=tags.name||'',hw=tags.highway||'';
+      const tl={cy:'Cycleway',gr:'Gravel/Unpaved',t1:'Low traffic',t2:'Medium traffic',t3:'Heavy traffic'}[tier];
+      line.bindPopup(`${nm?`<strong>${nm}</strong><br>`:''}<span style="color:#666;font-size:11px;">${tl} · ${hw}</span>`,{maxWidth:200});
+      line.addTo(map);
+      roadLayers.push({layer:line,tier});
+      inc++;
+    });
+    updateVis();
+    document.getElementById('load-overlay').style.display='none';
+    document.getElementById('status-bar').textContent=`${inc.toLocaleString()} segments · ${Object.keys(graph).length.toLocaleString()} routing nodes built`;
+    loadSavedRoutes();
+  },50);
+}
+
+function updateVis(){
+  roadLayers.forEach(({layer,tier})=>{
+    const ok=layerVisibility[tier];
+    if(ok){if(!map.hasLayer(layer))layer.addTo(map);}
+    else{if(map.hasLayer(layer))map.removeLayer(layer);}
+  });
+}
+function toggleLayer(key){
+  layerVisibility[key]=!layerVisibility[key];
+  const btn=document.getElementById('btn-'+key);
+  btn.classList.toggle('active',layerVisibility[key]);
+  const cls={cy:'cy',gr:'gr',t1:'low',t2:'med',t3:'heavy'};
+  if(cls[key]) btn.classList.toggle(cls[key],layerVisibility[key]);
+  updateVis();
+}
+function setTierWidth(key,val){
+  tierWidths[key]=parseInt(val);
+  document.getElementById('wv-'+key).textContent=val;
+  roadLayers.forEach(({layer,tier})=>{ if(tier===key) layer.setStyle({weight:parseInt(val)}); });
+}
+function updateOpacity(val){
+  document.getElementById('opacity-val').textContent=val+'%';
+  document.querySelectorAll('.leaflet-tile-pane').forEach(p=>p.style.opacity=(parseInt(val)/100).toFixed(2));
+}
+
+// ─── Cursor snap ─────────────────────────────────────────────────────────────
+function snapToRoad(latlng) {
+  if (!snapPoints.length) return {lat:latlng.lat,lng:latlng.lng};
+  let best=null,bestD=Infinity;
+  const ll={lat:latlng.lat,lng:latlng.lng};
+  for (const pt of snapPoints){ const d=hvM(ll,pt); if(d<bestD){bestD=d;best=pt;} }
+  return bestD<=SNAP_R?best:ll;
+}
+
+// ─── Routing: local graph first, OSRM fallback, then bridge ──────────────────
+function setPill(state,text){
+  const p=document.getElementById('routing-pill');
+  p.className=''; if(!state){p.style.display='none';return;}
+  p.classList.add(state); p.textContent=text; p.style.display='inline-block';
+}
+
+async function routeLeg(from,to){
+  const straightKm=hvKm(from,to);
+  if(straightKm<0.001) return{coords:[from,to],dist:0,isBridge:false};
+
+  setPill('routing','Routing…');
+
+  // 1. Try local graph (covers cycleways, gravel, all OSM ways equally)
+  const sk=nearestNode(from,GRAPH_SNAP_R);
+  const ek=nearestNode(to,GRAPH_SNAP_R);
+  if(sk&&ek){
+    const result=dijkstra(sk,ek, Math.min(straightKm*DETOUR_RATIO_MAX, LEG_DIST_MAX_KM));
+    if(result && result.dist<=straightKm*DETOUR_RATIO_MAX && result.dist<=LEG_DIST_MAX_KM){
+      setPill('snapped','Snapped ✓');
+      setTimeout(()=>setPill(null),1200);
+      // Prepend exact from-point and append exact to-point so route starts/ends precisely
+      return{coords:[from,...result.coords,to], dist:result.dist, isBridge:false};
+    }
+  }
+
+  // 2. OSRM fallback (handles roads well, may miss off-road cycleways)
+  try{
+    const url=`${OSRM_BASE}/${from.lng},${from.lat};${to.lng},${to.lat}?overview=full&geometries=geojson`;
+    const ctrl=new AbortController(),t=setTimeout(()=>ctrl.abort(),8000);
+    const r=await fetch(url,{signal:ctrl.signal}); clearTimeout(t);
+    const d=await r.json();
+    if(d.code==='Ok'&&d.routes&&d.routes[0]){
+      const osrmDist=d.routes[0].distance/1000;
+      const osrmCoords=d.routes[0].geometry.coordinates.map(([lng,lat])=>({lat,lng}));
+      if(osrmDist<=straightKm*DETOUR_RATIO_MAX&&osrmDist<=LEG_DIST_MAX_KM){
+        setPill('snapped','Snapped (road) ✓');
+        setTimeout(()=>setPill(null),1200);
+        return{coords:osrmCoords,dist:osrmDist,isBridge:false};
+      }
+    }
+  }catch(e){/* fall through */}
+
+  // 3. Bridge — straight line across the gap
+  console.info(`Gap bridge: ${straightKm.toFixed(2)} km straight`);
+  setPill('gap',`Gap bridge (${(straightKm*1000).toFixed(0)}m)`);
+  setTimeout(()=>setPill(null),2000);
+  return{coords:[from,to],dist:straightKm,isBridge:true};
+}
+
+// ─── Drawing ──────────────────────────────────────────────────────────────────
+function startDrawing(){
+  if(!snapPoints.length){alert('Road data still loading — please wait.');return;}
+  drawingMode=true; drawWaypoints=[]; drawLegs=[]; wpMarkers=[];
+  document.getElementById('drawing-bar').classList.add('visible');
+  document.getElementById('btn-draw').style.display='none';
+  map.getContainer().style.cursor='crosshair';
+  document.getElementById('status-bar').textContent='Click near any road or cycleway — double-click to finish';
+}
+function cancelDrawing(){
+  drawingMode=false; drawWaypoints=[];
+  wpMarkers.forEach(m=>map.removeLayer(m)); wpMarkers=[];
+  drawLegs.forEach(l=>map.removeLayer(l.polyline)); drawLegs=[];
+  if(snapIndicator){map.removeLayer(snapIndicator);snapIndicator=null;}
+  document.getElementById('drawing-bar').classList.remove('visible');
+  document.getElementById('btn-draw').style.display='';
+  document.getElementById('draw-dist').textContent='';
+  setPill(null); map.getContainer().style.cursor='';
+}
+async function addWaypoint(latlng){
+  const snapped=snapToRoad(latlng);
+  drawWaypoints.push(snapped);
+  const m=L.circleMarker([snapped.lat,snapped.lng],{
+    radius:6,color:'#e040a0',fillColor:'#fff',fillOpacity:1,weight:2.5,zIndexOffset:300
+  }).addTo(map); wpMarkers.push(m);
+  if(drawWaypoints.length>1){
+    const prev=drawWaypoints[drawWaypoints.length-2], cur=drawWaypoints[drawWaypoints.length-1];
+    const{coords,dist,isBridge}=await routeLeg(prev,cur);
+    const style=isBridge
+      ?{color:'#cc4444',weight:3,opacity:0.7,dashArray:'4 6'}
+      :{color:'#4a6cf7',weight:5,opacity:0.75,dashArray:'10 5'};
+    const poly=L.polyline(coords.map(c=>[c.lat,c.lng]),{...style,zIndexOffset:200}).addTo(map);
+    drawLegs.push({polyline:poly,dist,isBridge,coords});
+    updateDrawDist();
+  }
+}
+function updateDrawDist(){
+  const total=drawLegs.reduce((s,l)=>s+l.dist,0);
+  const bridges=drawLegs.filter(l=>l.isBridge).length;
+  const note=bridges?` (${bridges} gap${bridges>1?'s':''} bridged)`:'';
+  document.getElementById('draw-dist').textContent=total.toFixed(1)+' km'+note;
+}
+async function finishRoute(){
+  if(drawWaypoints.length<2){alert('Add at least 2 waypoints.');return;}
+  const name=document.getElementById('route-name-input').value.trim()||`Route ${savedRoutes.length+1}`;
+  const color=ROUTE_COLORS[savedRoutes.length%ROUTE_COLORS.length];
+  let allCoords=[]; drawLegs.forEach(l=>allCoords.push(...l.coords));
+  const dist=drawLegs.reduce((s,l)=>s+l.dist,0);
+  drawLegs.forEach(l=>map.removeLayer(l.polyline));
+  const poly=L.polyline(allCoords.map(c=>[c.lat,c.lng]),{color,weight:6,opacity:0.92,zIndexOffset:150});
+  poly.addTo(map); wpMarkers.forEach(m=>map.removeLayer(m));
+  if(snapIndicator){map.removeLayer(snapIndicator);snapIndicator=null;}
+  const route={name,color,points:allCoords,dist,id:Date.now(),poly};
+  savedRoutes.push(route); persistRoutes(); renderRouteList();
+  drawingMode=false; drawWaypoints=[]; drawLegs=[]; wpMarkers=[];
+  document.getElementById('drawing-bar').classList.remove('visible');
+  document.getElementById('btn-draw').style.display='';
+  document.getElementById('route-name-input').value='';
+  document.getElementById('draw-dist').textContent='';
+  setPill(null); map.getContainer().style.cursor='';
+  document.getElementById('status-bar').textContent=`"${name}" saved — ${dist.toFixed(1)} km`;
+}
+
+// ─── Route panel ──────────────────────────────────────────────────────────────
+function renderRouteList(){
+  const el=document.getElementById('route-list');
+  if(!savedRoutes.length){el.innerHTML='<div id="no-routes">No routes yet — draw one!</div>';document.getElementById('route-stats').style.display='none';return;}
+  el.innerHTML=savedRoutes.map(r=>`
+    <div class="route-item" id="ri-${r.id}" onclick="focusRoute(${r.id})">
+      <div class="rdot" style="background:${r.color}"></div>
+      <div class="rinfo"><div class="rname">${r.name}</div><div class="rmeta">${r.dist.toFixed(1)} km · ${(r.dist*0.621371).toFixed(1)} mi</div></div>
+      <div class="rdel" onclick="event.stopPropagation();deleteRoute(${r.id})" title="Delete">×</div>
+    </div>`).join('');
+}
+function focusRoute(id){
+  const r=savedRoutes.find(x=>x.id===id); if(!r?.poly) return;
+  map.fitBounds(r.poly.getBounds(),{padding:[30,30]});
+  document.querySelectorAll('.route-item').forEach(e=>e.classList.remove('active-route'));
+  document.getElementById('ri-'+id)?.classList.add('active-route');
+  const s=document.getElementById('route-stats'); s.style.display='block';
+  const slow=Math.round(r.dist/12*60),fast=Math.round(r.dist/20*60);
+  s.innerHTML=`<strong style="font-size:12px;">${r.name}</strong><div style="margin-top:7px;">
+    <div class="srow"><span class="slbl">Distance</span><span class="sval">${r.dist.toFixed(1)} km / ${(r.dist*0.621371).toFixed(1)} mi</span></div>
+    <div class="srow"><span class="slbl">Easy (~12 km/h)</span><span class="sval">${slow} min</span></div>
+    <div class="srow"><span class="slbl">Brisk (~20 km/h)</span><span class="sval">${fast} min</span></div>
+  </div>`;
+}
+function deleteRoute(id){
+  const idx=savedRoutes.findIndex(x=>x.id===id); if(idx<0) return;
+  if(savedRoutes[idx].poly) map.removeLayer(savedRoutes[idx].poly);
+  savedRoutes.splice(idx,1); persistRoutes(); renderRouteList();
+  if(!savedRoutes.length) document.getElementById('route-stats').style.display='none';
+}
+function persistRoutes(){ try{localStorage.setItem('bvt_routes',JSON.stringify(savedRoutes.map(r=>({id:r.id,name:r.name,color:r.color,dist:r.dist,points:r.points}))));}catch(e){} }
+function loadSavedRoutes(){
+  try{
+    const raw=localStorage.getItem('bvt_routes'); if(!raw) return;
+    JSON.parse(raw).forEach(r=>{
+      const poly=L.polyline(r.points.map(p=>[p.lat,p.lng]),{color:r.color,weight:6,opacity:0.92,zIndexOffset:150});
+      poly.addTo(map); savedRoutes.push({...r,poly});
+    });
+    if(savedRoutes.length) renderRouteList();
+  }catch(e){}
+}
+
+// ─── Init ─────────────────────────────────────────────────────────────────────
+async function init(){
+  map=L.map('map',{center:[44.52,-73.12],zoom:11});
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
+    attribution:'© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',maxZoom:19
+  }).addTo(map);
+  map.on('mousemove',e=>{
+    if(!drawingMode) return;
+    const sn=snapToRoad(e.latlng);
+    if(snapIndicator) snapIndicator.setLatLng([sn.lat,sn.lng]);
+    else snapIndicator=L.circleMarker([sn.lat,sn.lng],{radius:5,color:'#e040a0',fillColor:'#fff',fillOpacity:0.9,weight:2,zIndexOffset:400}).addTo(map);
+  });
+  map.on('click',async e=>{ if(!drawingMode) return; await addWaypoint(e.latlng); });
+  map.on('dblclick',e=>{
+    if(!drawingMode) return;
+    L.DomEvent.stopPropagation(e);
+    if(drawWaypoints.length>0){
+      drawWaypoints.pop();
+      const m=wpMarkers.pop(); if(m) map.removeLayer(m);
+      if(drawLegs.length>0){const l=drawLegs.pop();map.removeLayer(l.polyline);}
+    }
+    finishRoute();
+  });
+  setLS('Connecting to OpenStreetMap…','Querying extended region');
+  try{ const data=await fetchRoads(); renderRoads(data); }
+  catch(e){ showErr('All servers timed out. Click "Try again".'); }
+}
+init();
+</script>
+</body>
+</html>
