@@ -465,6 +465,20 @@ html, body { height: 100%; font-family: -apple-system, BlinkMacSystemFont, 'Sego
   transition: all 0.12s;
 }
 #btn-settings:hover { background: #f4f3f0; border-color: #aaa; color: #333; }
+
+/* Settings modal tier toggles */
+.s-tog {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 12px; font-weight: 500; padding: 7px 12px;
+  border: 1px solid #d8d5cf; border-radius: 6px;
+  background: #fff; color: #888; cursor: pointer; transition: all 0.12s;
+}
+.s-tog .sdot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+.s-tog.active      { background: #ede8f5; border-color: #542788; color: #3a1a66; font-weight: 600; }
+.s-tog.active.gr   { background: #f7f1eb; border-color: #a67c52; color: #5a3a1a; }
+.s-tog.active.low  { background: #f0eef8; border-color: #998ec3; color: #4a3a80; }
+.s-tog.active.med  { background: #fdf6ec; border-color: #e08214; color: #7a5010; }
+.s-tog.active.heavy{ background: #fdf0e8; border-color: #b35806; color: #6b3000; }
 </style>
 </head>
 <body>
@@ -1150,9 +1164,24 @@ function closeWelcome(permanent){
 
 
 // ─── Settings modal ───────────────────────────────────────────────────────────
+
+function syncSettingsTog(key){
+  const btn = document.getElementById('stog-'+key);
+  if(!btn) return;
+  const active = layerVisibility[key];
+  btn.className = 's-tog' + (active ? ' active' : '') +
+    (key==='gr' ? ' gr' : key==='t1' ? ' low' : key==='t2' ? ' med' : key==='t3' ? ' heavy' : '');
+}
+
+// Sync all settings toggles to current layerVisibility (called on openSettings)
+function syncAllSettingsToggles(){
+  ['cy','gr','t1','t2','t3'].forEach(syncSettingsTog);
+}
+
 function openSettings(){
   document.getElementById('settings-overlay').classList.add('open');
   // Sync modal sliders to current tierWidths values
+  syncAllSettingsToggles();
   ['cy','gr','t1','t2','t3'].forEach(k => {
     const el = document.getElementById('sw-'+k);
     const val = document.getElementById('swv-'+k);
@@ -1253,6 +1282,14 @@ init();
         <button id="settings-close" onclick="closeSettings()" aria-label="Close settings">×</button>
       </div>
       <div id="settings-body">
+        <div class="settings-section-label">Show on map</div>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:4px;">
+          <button class="s-tog active cy"  id="stog-cy" onclick="toggleLayer('cy');syncSettingsTog('cy')"><div class="sdot" style="background:#542788"></div>Cycleway</button>
+          <button class="s-tog gr"         id="stog-gr" onclick="toggleLayer('gr');syncSettingsTog('gr')"><div class="sdot" style="background:#a67c52"></div>Gravel</button>
+          <button class="s-tog active low" id="stog-t1" onclick="toggleLayer('t1');syncSettingsTog('t1')"><div class="sdot" style="background:#998ec3"></div>Low</button>
+          <button class="s-tog med"        id="stog-t2" onclick="toggleLayer('t2');syncSettingsTog('t2')"><div class="sdot" style="background:#e08214"></div>Medium</button>
+          <button class="s-tog heavy"      id="stog-t3" onclick="toggleLayer('t3');syncSettingsTog('t3')"><div class="sdot" style="background:#b35806"></div>Heavy</button>
+        </div>
         <div class="settings-section-label">Road width</div>
         <div class="settings-row">
           <label><div class="sdot" style="background:#542788"></div>Cycleway</label>
