@@ -654,7 +654,8 @@ const SNAP_R       = 100;
 const GRAPH_SNAP_R = 200;
 
 
-const TIER_COLORS = { cy:'#542788', gr:'#a67c52', t1:'#998ec3', t2:'#e08214', t3:'#b35806' };
+const TIER_COLORS    = { cy:'#542788', gr:'#a67c52', t1:'#998ec3', t2:'#e08214', t3:'#b35806' };
+const TIER_PRIORITY  = { cy:5, gr:4, t1:3, t2:2, t3:1 };
 const TIER_LABELS = { cy:'Cycleway', gr:'Gravel', t1:'Low', t2:'Medium', t3:'Heavy' };
 const tierWidths  = { cy:3.5, gr:1.5, t1:1.5, t2:1, t3:0.8 };
 const ROUTE_COLORS = ['#e63946','#2a9d8f','#f4a261','#8338ec','#06d6a0','#ef476f','#ffb703','#023047'];
@@ -1072,7 +1073,29 @@ function renderRouteList(){
 }
 function buildStatsHTML(r){
   const slow=Math.round(r.dist/12*60),fast=Math.round(r.dist/20*60);
-  const td=r.tierDist||{},total=Object.values(td).reduce((s,v)=>s+v,0)||1;
+  // If tierDist is missing or empty (old saved route), derive it from points
+  let td=r.tierDist||{};
+  const hasData=Object.values(td).some(v=>v>0);
+  if(!hasData && r.points && r.points.length>1){
+    // Build _ntc if not ready
+    if(!window._ntc){
+      window._ntc={};
+      for(const{layer,tier}of roadLayers){
+        for(const ll of layer.getLatLngs()){
+          const k=nk(ll.lat,ll.lng);
+          if(!window._ntc[k]||(TIER_PRIORITY[tier]||0)>(TIER_PRIORITY[window._ntc[k]]||0)) window._ntc[k]=tier;
+        }
+      }
+    }
+    td={cy:0,gr:0,t1:0,t2:0,t3:0,bridge:0};
+    for(let i=0;i<r.points.length-1;i++){
+      const a=r.points[i],b=r.points[i+1];
+      const tier=window._ntc[nk(a.lat,a.lng)]||'t1';
+      td[tier]=(td[tier]||0)+hvKm(a,b);
+    }
+    r.tierDist=td; // cache for next time
+  }
+  const total=Object.values(td).reduce((s,v)=>s+v,0)||1;
   const tiers=[['cy','Cycleway'],['gr','Gravel'],['t1','Low'],['t2','Medium'],['t3','Heavy'],['bridge','Gap']];
   const colors={...TIER_COLORS,bridge:'#cc4444'};
   const bar=tiers.map(([k])=>{const p=(td[k]||0)/total*100;return p>0.5?`<div class="stats-seg" style="width:${p.toFixed(1)}%;background:${colors[k]};"></div>`:''}).join('');
