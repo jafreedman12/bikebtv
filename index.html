@@ -4,8 +4,10 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Burlington VT Bike Route Planner</title>
+<link rel="preconnect" href="https://a.basemaps.cartocdn.com" />
+<link rel="preconnect" href="https://b.basemaps.cartocdn.com" />
+<link rel="preconnect" href="https://overpass-api.de" crossorigin />
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.0.0/tabler-icons.min.css" />
 <style>
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 html, body { height: 100%; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f4f3f0; color: #1a1a1a; }
@@ -545,7 +547,7 @@ html, body { height: 100%; font-family: -apple-system, BlinkMacSystemFont, 'Sego
 
     <button id="btn-filter-toggle" onclick="toggleFilters()" aria-label="Toggle filters" style="display:none;">⚙ Filters</button>
     <button id="btn-settings" onclick="openSettings()" title="Map settings" aria-label="Map settings">⚙️</button>
-    <button class="action-btn" id="btn-draw" onclick="startDrawing()"><i class="ti ti-route"></i> Draw route</button>
+    <button class="action-btn" id="btn-draw" onclick="startDrawing()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px"><circle cx="6" cy="19" r="2"/><circle cx="18" cy="5" r="2"/><path d="M12 19h4.5a3.5 3.5 0 0 0 0-7h-8a3.5 3.5 0 0 1 0-7H12"/></svg> Draw route</button>
   </div>
 
   <!-- Width controls -->
@@ -569,7 +571,7 @@ html, body { height: 100%; font-family: -apple-system, BlinkMacSystemFont, 'Sego
 
   <!-- Drawing bar -->
   <div id="drawing-bar">
-    <i class="ti ti-pencil-plus" style="font-size:14px;"></i>
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4L18.5 9.5a2.83 2.83 0 0 0-4-4L4 16v4"/><path d="M13.5 6.5l4 4"/><path d="M16 19h6"/><path d="M19 16v6"/></svg>
     <span>Click near any road or path — gaps bridge automatically</span>
     <span id="routing-pill"></span>
     <input type="text" id="route-name-input" placeholder="Name this route…" />
@@ -629,7 +631,7 @@ html, body { height: 100%; font-family: -apple-system, BlinkMacSystemFont, 'Sego
     <div id="load-overlay">
       <div class="spinner" id="load-spinner"></div>
       <div id="lmsg">Loading Burlington bike routes…</div>
-      <div id="lsub">Fetching road data — usually takes 10–30 seconds</div>
+      <div id="lsub">Loading road data</div>
       <button id="retry-btn" onclick="retryFetch()">Try again</button>
     </div>
 
@@ -642,8 +644,8 @@ html, body { height: 100%; font-family: -apple-system, BlinkMacSystemFont, 'Sego
 // ─── Config ───────────────────────────────────────────────────────────────────
 const OVERPASS_MIRRORS = [
   'https://overpass-api.de/api/interpreter',
+  'https://overpass.private.coffee/api/interpreter',
   'https://overpass.kumi.systems/api/interpreter',
-  'https://overpass.openstreetmap.ru/api/interpreter',
   'https://maps.mail.ru/osm/tools/overpass/api/interpreter'
 ];
 const OSRM_BASE    = 'https://router.project-osrm.org/route/v1/cycling';
@@ -722,13 +724,32 @@ function filterDeadEnds(elements){
 }
 
 
+// ─── Spatial grid (fast nearest-node lookups) ──────────────────────────────────
+const GRID_DEG = 0.0025;               // ~280m N-S, ~200m E-W at Burlington's latitude
+let nodeGrid = new Map();              // cellKey → [nodeKey]
+const gridKey = (i,j) => i+':'+j;
+function gridAdd(k,c){
+  const ck=gridKey(Math.floor(c.lat/GRID_DEG),Math.floor(c.lng/GRID_DEG));
+  let cell=nodeGrid.get(ck);if(!cell){cell=[];nodeGrid.set(ck,cell);}cell.push(k);
+}
+function gridNearest(pt,r){
+  const ci=Math.floor(pt.lat/GRID_DEG),cj=Math.floor(pt.lng/GRID_DEG);
+  const ri=Math.ceil(r/(GRID_DEG*111000)),rj=Math.ceil(r/(GRID_DEG*111000*Math.cos(pt.lat*Math.PI/180)));
+  let bk=null,bd=Infinity;
+  for(let i=ci-ri;i<=ci+ri;i++)for(let j=cj-rj;j<=cj+rj;j++){
+    const cell=nodeGrid.get(gridKey(i,j));if(!cell)continue;
+    for(const k of cell){const d=hvM(pt,nodeCoords[k]);if(d<bd){bd=d;bk=k;}}
+  }
+  return bd<=r?bk:null;
+}
+
 // ─── Graph ────────────────────────────────────────────────────────────────────
 function buildGraph(elements){
-  graph={}; nodeCoords={}; snapPoints=[];
+  graph={}; nodeCoords={}; snapPoints=[]; nodeGrid=new Map();
   elements.forEach(el=>{
     if(el.type!=='way'||!el.geometry||!el.tags||!shouldInclude(el.tags)) return;
     const coords=el.geometry.map(p=>({lat:p.lat,lng:p.lon}));
-    coords.forEach(c=>{snapPoints.push(c);nodeCoords[nk(c.lat,c.lng)]=c;});
+    coords.forEach(c=>{const k=nk(c.lat,c.lng);if(!nodeCoords[k]){nodeCoords[k]=c;snapPoints.push(c);gridAdd(k,c);}});
     for(let i=0;i<coords.length-1;i++){
       const ak=nk(coords[i].lat,coords[i].lng),bk=nk(coords[i+1].lat,coords[i+1].lng);
       const d=hvM(coords[i],coords[i+1]),seg=[coords[i],coords[i+1]];
@@ -741,9 +762,9 @@ function buildGraph(elements){
 function dijkstra(sk,ek,maxKm=30){
   if(sk===ek)return{coords:[nodeCoords[sk]],dist:0};
   if(!graph[sk]||!graph[ek])return null;
-  const dist={[sk]:0},prev={},prevC={},q=[{key:sk,d:0}];
-  while(q.length){
-    q.sort((a,b)=>a.d-b.d);const{key,d}=q.shift();
+  const dist={[sk]:0},prev={},prevC={},q=new MinHeap();q.push({key:sk,d:0});
+  while(q.size){
+    const{key,d}=q.pop();
     if(d>dist[key])continue;if(key===ek)break;if(d>maxKm*1000)break;
     for(const e of(graph[key]||[])){
       const nd=d+e.dist;
@@ -755,11 +776,13 @@ function dijkstra(sk,ek,maxKm=30){
   while(cur!==sk){const s=prevC[cur];if(!s)return null;path=[...s.slice(0,-1),...path];cur=prev[cur];}
   return{coords:[nodeCoords[sk],...path,nodeCoords[ek]],dist:dist[ek]/1000};
 }
-function nearestNode(pt,r){
-  let bk=null,bd=Infinity;
-  for(const[k,c]of Object.entries(nodeCoords)){const d=hvM(pt,c);if(d<bd&&d<=r){bd=d;bk=k;}}
-  return bk;
+class MinHeap{
+  constructor(){this.a=[];}
+  get size(){return this.a.length;}
+  push(x){const a=this.a;a.push(x);let i=a.length-1;while(i>0){const p=(i-1)>>1;if(a[p].d<=a[i].d)break;[a[p],a[i]]=[a[i],a[p]];i=p;}}
+  pop(){const a=this.a,top=a[0],last=a.pop();if(a.length){a[0]=last;let i=0;for(;;){const l=2*i+1,r=l+1;let m=i;if(l<a.length&&a[l].d<a[m].d)m=l;if(r<a.length&&a[r].d<a[m].d)m=r;if(m===i)break;[a[m],a[i]]=[a[i],a[m]];i=m;}}return top;}
 }
+function nearestNode(pt,r){return gridNearest(pt,r);}
 
 // ─── Tier breakdown ───────────────────────────────────────────────────────────
 function calcTierBreakdownFast(legs){
@@ -798,19 +821,89 @@ function renderTierBreakdown(legs,labelsId,barId){
 }
 
 // ─── Overpass fetch ───────────────────────────────────────────────────────────
-async function fetchMirror(url,query){
-  const ctrl=new AbortController(),t=setTimeout(()=>ctrl.abort(),55000);
-  try{const r=await fetch(url+'?data='+encodeURIComponent(query),{signal:ctrl.signal});clearTimeout(t);if(!r.ok)throw new Error('HTTP '+r.status);return r.json();}
-  catch(e){clearTimeout(t);throw e;}
+// Only ask for what the map can use: footways/pedestrian ways only when bikes are
+// allowed, and no driveways or parking-lot aisles. Cuts the download substantially.
+const ROAD_QUERY = `[out:json][timeout:90];(
+way["highway"~"^(cycleway|path|bridleway|track|living_street|residential|unclassified|tertiary|tertiary_link|secondary|secondary_link|primary|primary_link|trunk|trunk_link)$"](${BBOX});
+way["highway"="service"]["service"!~"^(driveway|parking_aisle|drive-through)$"](${BBOX});
+way["highway"~"^(footway|pedestrian)$"]["bicycle"~"^(yes|designated|permissive|official)$"](${BBOX});
+way["highway"="footway"]["segregated"="yes"](${BBOX});
+);out geom;`;
+const KEEP_TAGS = ['highway','bicycle','surface','segregated','name'];
+const CACHE_DB = 'bvt_cache', CACHE_KEY = 'roads_v2', CACHE_MAX_AGE = 7*24*3600*1000;
+
+// Strip each way down to the tags and geometry the app reads, so the cache stays small
+function slimRoads(raw){
+  return {elements:(raw.elements||[]).filter(el=>el.type==='way'&&el.geometry&&el.tags).map(el=>{
+    const tags={};for(const k of KEEP_TAGS)if(el.tags[k]!==undefined)tags[k]=el.tags[k];
+    return {type:'way',tags,geometry:el.geometry.map(p=>({lat:+p.lat.toFixed(6),lon:+p.lon.toFixed(6)}))};
+  })};
+}
+function idb(mode,fn){
+  return new Promise((res,rej)=>{
+    let req;try{req=indexedDB.open(CACHE_DB,1);}catch(e){return rej(e);}
+    req.onupgradeneeded=()=>req.result.createObjectStore('kv');
+    req.onerror=()=>rej(req.error);
+    req.onsuccess=()=>{const db=req.result,tx=db.transaction('kv',mode),r=fn(tx.objectStore('kv'));
+      tx.oncomplete=()=>{db.close();res(r&&r.result);};tx.onerror=()=>{db.close();rej(tx.error);};};
+  });
+}
+const cacheGet = () => idb('readonly',s=>s.get(CACHE_KEY)).catch(()=>null);
+const cachePut = data => idb('readwrite',s=>s.put({t:Date.now(),data},CACHE_KEY)).catch(()=>{});
+
+function fetchMirror(url,query,signal){
+  return fetch(url,{method:'POST',body:'data='+encodeURIComponent(query),
+    headers:{'Content-Type':'application/x-www-form-urlencoded'},signal})
+    .then(r=>{if(!r.ok)throw new Error('HTTP '+r.status);return r.json();});
+}
+// Ask every mirror at once (staggered slightly so the main one usually wins) and take the first good answer
+async function fetchFromNetwork(){
+  const ctrls=OVERPASS_MIRRORS.map(()=>new AbortController());
+  const t=setTimeout(()=>ctrls.forEach(c=>c.abort()),95000);
+  try{
+    const data=await Promise.any(OVERPASS_MIRRORS.map((u,i)=>
+      new Promise(r=>setTimeout(r,i*1500)).then(()=>{
+        if(ctrls[i].signal.aborted)throw new Error('cancelled');
+        return fetchMirror(u,ROAD_QUERY,ctrls[i].signal);
+      }).then(d=>{if(!d||!d.elements||!d.elements.length)throw new Error('empty');return d;})));
+    ctrls.forEach(c=>c.abort());
+    return slimRoads(data);
+  }catch(e){throw new Error('All mirrors failed');}
+  finally{clearTimeout(t);}
+}
+// roads.js is made by build_roads.py and sits next to this file. Loading it is a plain
+// static download, so it never waits on Overpass. Missing file → fall back to cache/network.
+function loadBundledRoads(){
+  if(window.BVT_ROADS)return Promise.resolve(window.BVT_ROADS);
+  return new Promise(res=>{
+    const s=document.createElement('script');s.src='roads.js';
+    s.onload=()=>res(window.BVT_ROADS||null);s.onerror=()=>res(null);
+    document.head.appendChild(s);
+  });
+}
+function decodeBundledRoads(b){
+  const elements=b.ways.map(w=>{
+    const geometry=[];let lat=0,lon=0;
+    for(let i=1;i<w.length;i+=2){lat+=w[i];lon+=w[i+1];geometry.push({lat:lat/1e5,lon:lon/1e5});}
+    return {type:'way',tags:b.tags[w[0]],geometry};
+  });
+  window.BVT_ROADS=null; // free the encoded copy
+  return {elements};
 }
 async function fetchRoads(){
-  const q=`[out:json][timeout:60];(way["highway"~"^(cycleway|path|bridleway|track|living_street|residential|unclassified|service|tertiary|tertiary_link|secondary|secondary_link|primary|primary_link|trunk|trunk_link|footway|pedestrian)$"](${BBOX}););out geom;`;
-  for(let i=0;i<OVERPASS_MIRRORS.length;i++){
-    setLS('Loading Burlington bike routes…', i===0?'Fetching road data — hang tight!':'Trying a different server…');
-    try{return await fetchMirror(OVERPASS_MIRRORS[i],q);}
-    catch(e){if(i<OVERPASS_MIRRORS.length-1){setLS('Still loading…','Switching to a backup server');await new Promise(r=>setTimeout(r,1200));}}
+  setLS('Loading Burlington bike routes…','Loading road data');
+  const bundled=await loadBundledRoads();
+  if(bundled&&bundled.ways)return decodeBundledRoads(bundled);
+  const cached=await cacheGet();
+  if(cached&&cached.data){
+    // Show saved data straight away; refresh it quietly for next time once it's a week old
+    if(Date.now()-cached.t>CACHE_MAX_AGE)fetchFromNetwork().then(cachePut).catch(()=>{});
+    return cached.data;
   }
-  throw new Error('All mirrors failed');
+  setLS('Loading Burlington bike routes…','Fetching live road data from OpenStreetMap. This can take up to a minute; the next visit will be instant.');
+  const data=await fetchFromNetwork();
+  cachePut(data);
+  return data;
 }
 function setLS(m,s){document.getElementById('lmsg').textContent=m;if(s!==undefined)document.getElementById('lsub').textContent=s;}
 function showErr(m){document.getElementById('load-spinner').style.display='none';setLS("Couldn't load road data",m||'The map server may be busy — please try again in a moment.');document.getElementById('retry-btn').style.display='inline-block';}
@@ -836,10 +929,10 @@ function renderRoads(raw){
       const TIER_OPACITY={cy:0.92,gr:0.75,t1:0.82,t2:0.62,t3:0.62};
       const opts={color:TIER_COLORS[tier],weight:tierWidths[tier],opacity:TIER_OPACITY[tier]||0.7};
       if(tier==='gr')opts.dashArray='7 5';
+      opts.renderer=roadRenderer;
       const line=L.polyline(lls,opts);
       const nm=tags.name||'',hw=tags.highway||'';
       line.bindPopup(`${nm?`<strong>${nm}</strong><br>`:''}<span style="color:#666;font-size:11px;">${TIER_LABELS[tier]} · ${hw}</span>`,{maxWidth:200});
-      line.addTo(map);
       roadLayers.push({layer:line,tier});
       inc++;
     });
@@ -850,7 +943,9 @@ function renderRoads(raw){
     loadSavedRoutes();
   },50);
 }
-function updateVis(){roadLayers.forEach(({layer,tier})=>{const ok=layerVisibility[tier];if(ok){if(!map.hasLayer(layer))layer.addTo(map);}else{if(map.hasLayer(layer))map.removeLayer(layer);}});}
+// Below zoom 13 only cycleways show; at 13+ every active tier shows
+function shouldShow(tier){return layerVisibility[tier]&&(map.getZoom()>=13||tier==='cy');}
+function updateVis(){roadLayers.forEach(({layer,tier})=>{if(shouldShow(tier)){if(!map.hasLayer(layer))layer.addTo(map);}else{if(map.hasLayer(layer))map.removeLayer(layer);}});}
 function toggleLayer(key){
   layerVisibility[key]=!layerVisibility[key];
   const btn=document.getElementById('btn-'+key);btn.classList.toggle('active',layerVisibility[key]);
@@ -861,10 +956,10 @@ function setTierWidth(key,val){tierWidths[key]=parseInt(val);document.getElement
 
 // ─── Snap ─────────────────────────────────────────────────────────────────────
 function snapToRoad(ll){
-  if(!snapPoints.length)return{lat:ll.lat,lng:ll.lng};
-  let best=null,bd=Infinity;const p={lat:ll.lat,lng:ll.lng};
-  for(const pt of snapPoints){const d=hvM(p,pt);if(d<bd){bd=d;best=pt;}}
-  return bd<=SNAP_R?best:p;
+  const p={lat:ll.lat,lng:ll.lng};
+  if(!snapPoints.length)return p;
+  const k=gridNearest(p,SNAP_R);
+  return k?nodeCoords[k]:p;
 }
 
 // ─── Routing leg ─────────────────────────────────────────────────────────────
@@ -1258,23 +1353,35 @@ function handleResize(){
 }
 window.addEventListener('resize', handleResize);
 // ─── Init ─────────────────────────────────────────────────────────────────────
+// ─── Basemap ──────────────────────────────────────────────────────────────────
+// Tried in order: if a provider's tiles keep failing before any load, switch to the next one.
+const OSM_ATTR='© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
+const BASEMAPS=[
+  {url:'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',opts:{subdomains:'abcd',maxZoom:20,attribution:OSM_ATTR+' &copy; <a href="https://carto.com/attributions">CARTO</a>'}},
+  {url:'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}',opts:{maxZoom:16,maxNativeZoom:16,attribution:'Tiles &copy; Esri — Esri, HERE, Garmin, &copy; OpenStreetMap contributors'}},
+  {url:'https://tile.openstreetmap.org/{z}/{x}/{y}.png',opts:{maxZoom:19,attribution:OSM_ATTR}}
+];
+function addBasemap(i=0){
+  const b=BASEMAPS[i];if(!b)return;
+  let loaded=0,errors=0;
+  const layer=L.tileLayer(b.url,{...b.opts,maxZoom:19,keepBuffer:4,updateWhenZooming:false});
+  layer.on('tileload',()=>{loaded++;});
+  layer.on('tileerror',()=>{
+    if(++errors>=4&&!loaded&&tileLayer===layer){map.removeLayer(layer);addBasemap(i+1);}
+  });
+  tileLayer=layer.addTo(map);
+  tileLayer.bringToBack();
+}
+
+let roadRenderer;
 async function init(){
-  map=L.map('map',{center:[44.478,-73.213],zoom:14});
+  map=L.map('map',{center:[44.478,-73.213],zoom:14,preferCanvas:true});
+  // One shared canvas for all road lines is far faster than thousands of SVG paths
+  roadRenderer=L.canvas({padding:0.5,tolerance:4});
 
   // Zoom-dependent rendering: at low zoom show only cy+t1, at high zoom show all active tiers
-  map.on('zoomend', ()=>{
-    const z=map.getZoom();
-    roadLayers.forEach(({layer,tier})=>{
-      if(!layerVisibility[tier]){if(map.hasLayer(layer))map.removeLayer(layer);return;}
-      // Below zoom 13: only show cycleways; 13-14: cy+t1; 14+: all active
-      const show = z>=13 ? true : tier==='cy';
-      if(show){if(!map.hasLayer(layer))layer.addTo(map);}
-      else{if(map.hasLayer(layer))map.removeLayer(layer);}
-    });
-  });
-  tileLayer=L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',{
-    attribution:'© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',maxZoom:19,subdomains:'abcd'
-  }).addTo(map);
+  map.on('zoomend', updateVis);
+  addBasemap();
 
 
   map.on('mousemove',e=>{
@@ -1290,7 +1397,6 @@ async function init(){
     finishRoute();
   });
 
-  setLS('Loading Burlington bike routes…','Fetching road data — usually takes 10–30 seconds');
   try{const data=await fetchRoads();renderRoads(data);}
   catch(e){showErr('Couldn\'t load road data. The map server may be busy — please try again in a moment.');}
 }
