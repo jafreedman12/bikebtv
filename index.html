@@ -1398,7 +1398,7 @@ function addBasemap(){
     baseLayers[b.name]=layer;
   });
   let saved=null;try{saved=localStorage.getItem(BASEMAP_KEY);}catch(e){}
-  const def=location.protocol==='file:'?'Light gray (Esri)':'Light (CARTO)';
+  const def='Light gray (Esri)';;
   useBasemap(baseLayers[saved]?saved:def);
   L.control.layers(baseLayers,null,{position:'topleft',collapsed:true}).addTo(map);
   map.on('baselayerchange',e=>{tileLayer=e.layer;try{localStorage.setItem(BASEMAP_KEY,e.name);}catch(err){}});
